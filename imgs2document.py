@@ -61,9 +61,8 @@ def insertImages2WordDoc(img_path=None, doc_path=None):
                 doc.add_page_break()                
             except:
                 print(f"{image} is not a picture")
-            
-        doc.save(doc_name)
-        doc.close()        
+        doc.save(doc_name)        
+
         print(f"Word file {doc_name} created, {len(image_list)} images added!")
         
 
@@ -112,7 +111,9 @@ def insertImages2PDF(img_path=None, pdf_path=None):
                         
             #get the width and height of the image by PIL
             
-            img = PIL.Image.open(image)          
+            #use PIL to open the image file based on file extension
+
+            img = PIL.Image.open(image)
             
             #get dpi information from the image
             
@@ -180,7 +181,7 @@ def ResizeImage(image,size=6, convert=True):
     dpi = image.info.get('dpi', (300, 300))  
       
     #resize the image and keep aspect ratio to make sure the longer edage is not longer than 6 inches
-    if height > width and height > size*dpi[1]:
+    if height >= width and height > size*dpi[1]:
         #   height is longer than width
         new_height = size*dpi[1]
         new_width = int(width * new_height / height)
@@ -197,7 +198,7 @@ def ResizeImage(image,size=6, convert=True):
 
 
     #reszie the image to the new size
-    image = image.resize((new_width, new_height), PIL.Image.ANTIALIAS)
+    image = image.resize((new_width, new_height), PIL.Image.ANTIALIAS, dpi)
     
     #if the image is RGBA, convert it to RGB
     if convert:
