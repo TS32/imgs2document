@@ -7,6 +7,7 @@ import PIL
 import fstring
 import docx
 from fpdf import FPDF
+from tqdm import tqdm
 
 def insertImages2WordDoc(img_path=None, doc_path=None):        
         # Get the path to the folder
@@ -37,28 +38,24 @@ def insertImages2WordDoc(img_path=None, doc_path=None):
                     try:
                         PIL.Image.open(os.path.join(root, file))
                         image_list.append(os.path.join(root, file))
-                    except IOError:
-                        print(f"{file} is not a picture")
+                    except Exception as e:
+                        print(f"[Error] : inserting {file} failed, skip! Failure reason: \n        Exception : {e}\n")
                 
         #sort the list of images
         image_list.sort()
-        print(f"{len(image_list)} images found in the folder {image_folder}:")
-        for x in image_list:
-            print(x)
+        print(f"{len(image_list)} images found in the folder {image_folder}:")        
         
         #now we have a list of images, we can create the pdf file
         doc = docx.Document()                        
-        for image in image_list:            
+        for image in tqdm(image_list, desc="Inserting images to document",total=len(image_list)):
            #insert the image to doc, make sure the size of the image is not bigger than the page and keep ratio           
           #in case of any exception, skip the image
             try:                
-                img = PIL.Image.open(image)                                  
-                #resize the image to 6 inches
-                img = ResizeImage(img)                
-                #now insert the image to word document resize to 6 inches, and keep ratio
-                doc.add_picture(image, width=docx.shared.Inches(6))                
-                img.close()                                
-                doc.add_page_break()                
+                p=doc.add_paragraph()
+                p.alignment=docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                r=p.add_run()
+                r.add_picture(image, width=docx.shared.Inches(6))
+                doc.add_page_break()                                            
             except:
                 print(f"{image} is not a picture")
         doc.save(doc_name)        
@@ -97,23 +94,29 @@ def insertImages2PDF(img_path=None, pdf_path=None):
     image_list.sort()
     print(f"{len(image_list)} images found in the folder {image_folder}:")
     
+    layoutOreintation = "L"
+
     pdf = FPDF('L', 'mm', 'A4')
     
     #define A4 page width and height
-    A4_page_width = 210
-    A4_page_height = 297
-                
+    if layoutOreintation == "P":
+        A4_page_width = 210
+        A4_page_height = 297
+    else:
+        A4_page_width = 297
+        A4_page_height = 210
+
     pdf.set_auto_page_break(False)        
     img=None
     
-    for id, image in enumerate(image_list):
+    for id, image in tqdm(enumerate(image_list), desc="Inserting images to pdf",total=len(image_list)):
         try:
                         
             #get the width and height of the image by PIL
             
             #use PIL to open the image file based on file extension
 
-            img = PIL.Image.open(image)
+            img = PIL.Image.open(image).convert('RGB')
             
             #get dpi information from the image
             
@@ -121,14 +124,14 @@ def insertImages2PDF(img_path=None, pdf_path=None):
             
             #get the width and height of the temp file image by PIL
             
-            width = img.size[0]
-            height = img.size[1]
-            dpi = img.info.get('dpi', (300, 300))
+            width_pixel = img.size[0]
+            height_pixel = img.size[1]
+            dpi = img.info.get('dpi', (300, 300))   
 
             #convert width and height to mm
-            width_mm = int(width / dpi[0] * 25.4)
-            height_mm = int(height / dpi[1] * 25.4)
-                                
+            width_mm = int(width_pixel / dpi[0] * 25.4)            
+            height_mm = int(height_pixel / dpi[1] * 25.4)            
+                                            
             #save img to temp file
             temp_file = f"temp_{id}.jpg"
             img.save(temp_file, "JPEG",dpi=dpi)
@@ -140,8 +143,9 @@ def insertImages2PDF(img_path=None, pdf_path=None):
             
             #calculate the x and y poistion of the image based on page size, make sure the image is in the center of the page
             pos_x = (A4_page_width- width_mm) / 2
-            pos_y = 25.4
+            pos_y = (A4_page_height- height_mm) / 2
             
+            #insert the image to pdf, make sure the size of the image is not bigger than the page and keep ratio            
             pdf.image(temp_file, pos_x, pos_y, w=width_mm, h=height_mm)
             
             #remove temp file
@@ -169,42 +173,39 @@ def insertImages2PDF(img_path=None, pdf_path=None):
     
 
 def ResizeImage(image,size=6, convert=True):
-    '''image is an image which is already opened by PIL.size is the size of the image in inches, default is 6 inches, convert is the option if the pic should be converted to RGB if it's RGBA'''
+    '''image is an image which is already opened by PIL.
+       size is the size of the image resolution,
+       convert is the option if the pic should be converted to RGB if it's RGBA
+    '''
     new_height=0
     new_width=0    
     
     #first get width and height of the image
     #open the image
     
-    width = image.size[0]
-    height = image.size[1]
-    dpi = image.info.get('dpi', (300, 300))  
+    width_pixel = image.size[0]
+    height_pixel = image.size[1]
+    dpi = image.info.get('dpi', (300, 300))   
       
-    #resize the image and keep aspect ratio to make sure the longer edage is not longer than 6 inches
-    if height >= width and height > size*dpi[1]:
-        #   height is longer than width
-        new_height = size*dpi[1]
-        new_width = int(width * new_height / height)
+    #calculate the new width and height
+    if width_pixel > height_pixel:
+        new_width = int(size * dpi[0])
+        new_height = int(new_width * height_pixel / width_pixel)
+    else:
+        new_height = int(size * dpi[1])
+        new_width = int(new_height * width_pixel / height_pixel)
     
-    elif height < width and width > size*dpi[0]:
-        #   width is longer than height
-        new_width = size*dpi[0]
-        new_height = int(height * new_width / width)
+    #print the resize info
+    print(f"\nResize image from {width_pixel}x{height_pixel} to {new_width}x{new_height}, dpi={dpi}")
     
-    else: #no need to resize, just return the image
-        if convert:
-            image = image.convert('RGB')
-        return image  
-
-
-    #reszie the image to the new size
-    image = image.resize((new_width, new_height), PIL.Image.ANTIALIAS, dpi)
+    #resize the image
+    img = image.resize((int(new_width), int(new_height)), PIL.Image.ANTIALIAS)
     
-    #if the image is RGBA, convert it to RGB
+    #convert the image to RGB if it's RGBA
     if convert:
-        image = image.convert('RGB')
-    return image
-
+        img = img.convert('RGB')
+    
+    return img
 
 if __name__ == "__main__":
     #First ask the user if he wants to create a pdf or a word file by using easygui choicebox
